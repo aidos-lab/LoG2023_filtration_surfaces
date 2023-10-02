@@ -46,27 +46,39 @@ def convert_dataset_to_dynamic_graph(path, dataset_name="infectious_ct1"):
         current_edges = set()
         node_dict = {}  # dictionary to keep track of node indices and their labels
 
-        for timestamp, graph_data in sorted(graph_timeline.items()):
-            for node, label in graph_data["nodes"]:
-                node_dict[node] = label  # add node label to dictionary
-            current_edges.update(graph_data["edges"])  # add new edges to current_edges
-
-        # Now that we have collected all the unique nodes, we create the graph
         g = Graph()
-        for node in node_dict:
-            g.add_vertex(name=str(node))  # add vertex with name
-        g.vs["label"] = [node_dict[int(v["name"])] for v in g.vs]  # set the node labels
-
         for timestamp, graph_data in sorted(graph_timeline.items()):
-            current_edges = graph_data["edges"]  # get the edges for the current timestamp
-            g.add_edges([(str(u), str(v)) for (u, v) in current_edges])  # add edges with node names
-            g["label"] = graph_labels[graph_id-1]  # graph ids are 1-indexed
-            dynamic_graphs[graph_id].append(g.copy())  # add a copy of the graph to the list
-            # labels[graph_id].append(graph_labels[graph_id-1])  # graph ids are 1-indexed
-            labels[graph_id] = graph_labels[graph_id-1]  # graph ids are 1-indexed
+            # Add or update nodes and labels
+            for node, label in graph_data["nodes"]:
+                try:
+                    existing_node_names = g.vs["name"]
+                except KeyError:
+                    existing_node_names = []
+                if str(node) not in existing_node_names:
+                    g.add_vertex(name=str(node))
+                node_dict[node] = label
+            
+            # Update the igraph object
+            for v in g.vs:
+                node_name = int(v["name"])
+                try:
+                    existing_label = v["label"]
+                except KeyError:
+                    existing_label = None
+                v["label"] = node_dict.get(node_name, existing_label)
+            # Add edges
+            current_edges = graph_data["edges"]
+            g.add_edges([(str(u), str(v)) for (u, v) in current_edges])
+            
+            # Add graph label
+            g["label"] = graph_labels[graph_id - 1]
+            
+            # Append a copy of the graph to dynamic_graphs
+            dynamic_graphs[graph_id].append(g.copy())
+            
+            labels[graph_id] = graph_labels[graph_id - 1]
 
     return dynamic_graphs, labels
-
 
 # TODO: this is replicated here and in generate_dynamic_graphs.py
 # Save the dynamic graphs and their labels like in save_dynamic_graphs()
